@@ -92,7 +92,7 @@ class Supernet(nn.Sequential):
             parent = get_module(self, '.'.join(module_split[:-1]))
             name = module_split[-1]
             child = getattr(parent, name)
-            setattr(parent, module_split[-1], module)
+            setattr(parent, name, module)
             for module_string, m in self.named_modules():
                 if m == child:
                     break
@@ -115,13 +115,12 @@ class Supernet(nn.Sequential):
             handle.remove()
         return module_io
 
-    def conv2xd(self, sample_input, *args, named_modules=None, warm_start=True, verbose=False, padding='auto', padding_mode='auto', **kwargs):
+    def conv2xd(self, sample_input, *args, named_modules=None, verbose=False, padding='auto', padding_mode='auto', **kwargs):
         '''
         Args:
             sample_input: torch.Tensor of shape [batch-size, input-channels, *input-width]
             args: additional arguments passed to self.forward
             named_modules: iterable of named modules ; if None uses all modules in self.model
-            warm_start: whether to initialize modules as 2d convs
             verbose: print patch logs
             padding: if 'auto' uses padding from target module
             paddin_mode: if 'auto' uses padding_mode from target module
@@ -133,8 +132,6 @@ class Supernet(nn.Sequential):
         module_io = self.collect_io(sample_input, (m for _, m in named_modules), *args)
 
         for name, module in named_modules:
-            ks = module.kernel_size
-            arch_init = 'conv_' + 'x'.join(str(k) for k in ks)
             wn = check_weight_norm(module)
             msg = ""
             if wn is None:

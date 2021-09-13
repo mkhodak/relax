@@ -452,9 +452,11 @@ def pad2size(x, size, **kwargs):
         padded tensor
     '''
 
-    return F.pad(x,
-                 sum(((n-k, 0) for n, k in zip(size, x.shape[-len(size):])), ())[::-1],
-                 **kwargs)
+    if hasattr(x, 'dim'):
+        return F.pad(x,
+                     sum(((n-k, 0) for n, k in zip(size, x.shape[-len(size):])), ())[::-1],
+                     **kwargs)
+    return (pad2size(w, size, **kwargs) for w in x)
 
 
 def truncate_freq(in_size, freqs):
@@ -485,14 +487,14 @@ class XD(nn.Module):
         Args:
             in_channels: number of input channels
             out_channels: number of output_channels
-            kernel_size: kernel size; passed to 'arch'
+            kernel_size: kernel size as an int or tuple; passed to 'arch'
             args: passed to 'arch'
-            weight: weight parameter
-            bias: optional bias parameter
+            weight: weight parameter as a torch.nn.Parameter object; also takes torch.nn.ParameterList; if None initializes using kernel_size
+            bias: optional bias parameter as a torch.nn.Parameter object
             groups: number of channel groups
             arch: architecture initializer method
             truncate: truncate frequencies to kernel size
-            dtype: dtype of weight tensor
+            dtype: dtype of weight tensor if initializing
             einsum: if True use torch.einsum for product
             kwargs: passed to 'arch'
         '''
@@ -503,12 +505,18 @@ class XD(nn.Module):
                 raise(ValueError("in_channels must be divisible by groups"))
             elif in_channels != out_channels or groups != in_channels:
                 raise(NotImplementedError("in_channels must equal groups"))
-        self.groups = groups
-        self.kernel_size = int2tuple(kernel_size, length=2, allow_other=True)
-        self.dims = len(self.kernel_size)
-        self.weight = nn.Parameter(torch.Tensor(out_channels, in_channels // self.groups, *self.kernel_size).type(dtype)) if weight is None else weight
-        self.bias = bias if bias is None else bias
-        self.K, self.L, self.M, self.inpad, self.unpad = arch(self.kernel_size, *args, **kwargs)
+        self.separable = groups == out_channels > 1
+        kernel_size = int2tuple(kernel_size, length=2, allow_other=True)
+        self.K, self.L, self.M, self.inpad, self.unpad = arch(kernel_size, *args, **kwargs)
+
+        if weight is None:
+            self.kernel_size = kernel_size
+            self.weight = nn.Parameter(torch.Tensor(out_channels, in_channels // groups, *self.kernel_size).type(dtype))
+        else:
+            self.kernel_size = tuple(weight.shape[2:]) if hasattr(weight, 'shape') else tuple(max(w.shape[i] for w in weight) for i in range(2, len(weight[0].shape)))
+            self.weight = weight
+
+        self.bias = bias
         self.truncate = truncate
         self.einsum = einsum
 
@@ -522,22 +530,22 @@ class XD(nn.Module):
         if self.truncate:
             out = torch.zeros(*x.shape, dtype=x.dtype, device=x.device)
             for slices in truncate_freq(in_size, [k//2 for k in self.kernel_size[:-1]] + [self.kernel_size[-1]]):
-                out[slices] = multichannel_prod(x[slices], diag[slices], separable=self.groups == self.weight.shape[0] > 1, einsum=self.einsum)
+                out[slices] = multichannel_prod(x[slices], diag[slices], separable=self.separable, einsum=self.einsum)
             x = out
         else:
-            x = multichannel_prod(x, diag, separable=self.groups == self.weight.shape[0] > 1, einsum=self.einsum)
+            x = multichannel_prod(x, diag, separable=self.separable, einsum=self.einsum)
 
         x = self.K(x)
         x = self.unpad(x, unpad)
         if self.bias is None:
             return x
-        return x + self.bias.reshape(1, *self.bias.shape, *[1]*self.dims)
+        return x + self.bias.reshape(1, *self.bias.shape, *[1]*len(in_size))
 
     @staticmethod
     def is_architectural(n):
         '''returns False if the name of a parameter corresponds to a model weight'''
 
-        return not ('weight' in n or n == 'bias')
+        return not n.split('.')[0] in {'weight', 'bias'}
 
     def named_arch_params(self):
         ''''named_parameters' restricted to architecture parameters'''
