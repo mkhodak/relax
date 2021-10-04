@@ -456,7 +456,7 @@ def pad2size(x, size, **kwargs):
         return F.pad(x,
                      sum(((n-k, 0) for n, k in zip(size, x.shape[-len(size):])), ())[::-1],
                      **kwargs)
-    return (pad2size(w, size, **kwargs) for w in x)
+    return x, size, kwargs
 
 
 def truncate_freq(in_size, freqs):
