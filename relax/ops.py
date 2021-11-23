@@ -161,3 +161,34 @@ class FNO(nn.Module):
         for xslices, wslices in zip(self._get_slices(size), self._get_slices()):
             out_ft[xslices] = multichannel_prod(x_ft[xslices], self.weight[wslices], separable=self.groups == self.weight.shape[0] > 1, einsum=self.einsum)
         return self.ifft(out_ft, s=s if self.compact else None, dim=tuple(range(-self.dims, 0)), norm='ortho')[unpad]
+
+
+class SharedOperation(nn.Module):
+
+    @staticmethod
+    def is_architectural(n):
+        '''returns False if the name of a parameter corresponds to a model weight'''
+
+        return not n.split('.')[0] in {'weight', 'bias'}
+
+    def named_arch_params(self):
+        ''''named_parameters' restricted to architecture parameters'''
+
+        return ((n, p) for n, p in self.named_parameters() if self.is_architectural(n))
+
+    def arch_params(self):
+        ''''parameters' restricted to architecture parameters'''
+
+        return (p for _, p in self.named_arch_params())
+
+    def named_model_weights(self):
+        ''''named_parameters' restricted to model weights'''
+
+        return ((n, p) for n, p in self.named_parameters() if not self.is_architectural(n))
+
+    def model_weights(self):
+        ''''parameters' restricted to model weights'''
+
+        return (p for _, p in self.named_model_weights())
+
+

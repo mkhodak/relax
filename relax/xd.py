@@ -5,7 +5,7 @@ from itertools import product
 import torch
 from torch import nn
 from torch.nn import functional as F
-from relax.ops import AvgPool, Conv, ConvTranspose, FNO, Fourier, int2tuple, multichannel_prod
+from relax.ops import AvgPool, Conv, ConvTranspose, FNO, Fourier, SharedOperation, int2tuple, multichannel_prod
 
 
 class TensorProduct(nn.Module):
@@ -479,7 +479,7 @@ def truncate_freq(in_size, freqs):
                            for b, n, f in zip(reversed(bits), in_size, freqs)]
 
 
-class XD(nn.Module):
+class XD(SharedOperation):
     '''XD-Operation module for all dimensions'''
 
     def __init__(self, in_channels, out_channels, kernel_size, *args, weight=None, bias=None, groups=1, arch=fixed, truncate=False, dtype=torch.float32, einsum=False, **kwargs):
@@ -540,29 +540,3 @@ class XD(nn.Module):
         if self.bias is None:
             return x
         return x + self.bias.reshape(1, *self.bias.shape, *[1]*len(in_size))
-
-    @staticmethod
-    def is_architectural(n):
-        '''returns False if the name of a parameter corresponds to a model weight'''
-
-        return not n.split('.')[0] in {'weight', 'bias'}
-
-    def named_arch_params(self):
-        ''''named_parameters' restricted to architecture parameters'''
-
-        return ((n, p) for n, p in self.named_parameters() if self.is_architectural(n))
-
-    def arch_params(self):
-        ''''parameters' restricted to architecture parameters'''
-
-        return (p for _, p in self.named_arch_params())
-
-    def named_model_weights(self):
-        ''''named_parameters' restricted to model weights'''
-
-        return ((n, p) for n, p in self.named_parameters() if not self.is_architectural(n))
-
-    def model_weights(self):
-        ''''parameters' restricted to model weights'''
-
-        return (p for _, p in self.named_model_weights())
