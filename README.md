@@ -5,7 +5,7 @@ Shell scripts in <tt>examples/resnet</tt> and <tt>examples/pde</tt> reproduce th
 Install instructions below; a Dockerfile is also provided.
 ```
 conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch -c nvidia
-pip install fire h5py scipy tensorboard tensorboardX
+pip install fire h5py scipy tensorboard tensorboardX requests
 git clone --single-branch --branch pt1.8 https://github.com/HazyResearch/butterfly.git butterfly
 cd butterfly && export FORCE_CUDA="1" && python setup.py install
 pip install -e .
@@ -13,7 +13,7 @@ pip install -e .
 
 ## usage
 
-XD is straightforward to apply by inserting code similar to the following into a PyTorch training script. The following code takes an existing CNN model, re-parameterizes all of its convolutions using the XD relaxation, and defines an optimizer that updates the original model weights using SGD and the architecture parameters (K-matrices) using Adam. More detailed examples, including how to handle learning rate schedules and how to re-parameterize only specific convolutions, can be found in the 'examples' folder.
+XD is straightforward to apply by inserting code similar to the following into a PyTorch training script. The code takes an existing CNN model, re-parameterizes all of its convolutions using the XD relaxation, and defines an optimizer that updates the original model weights using SGD and the architecture parameters (K-matrices) using Adam. More detailed examples, including how to handle learning rate schedules and how to re-parameterize only specific convolutions, can be found in the 'examples' folder.
 
 ```
 ### script setup

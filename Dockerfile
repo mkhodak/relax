@@ -16,7 +16,7 @@ RUN echo "source activate pytorch_env" > ~/.bashrc
 ENV PATH /opt/conda/envs/pytorch_env/bin:$PATH
 ENV CONDA_DEFAULT_ENV pytorch_env
 RUN conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch -c nvidia
-RUN pip install fire h5py scipy tensorboard tensorboardX
+RUN pip install fire h5py scipy tensorboard tensorboardX requests
 
 RUN git clone --single-branch --branch pt1.8 https://github.com/HazyResearch/butterfly.git /code/butterfly
 RUN cd /code/butterfly && export FORCE_CUDA="1" && python setup.py install
