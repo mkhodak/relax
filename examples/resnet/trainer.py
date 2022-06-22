@@ -155,9 +155,8 @@ def main():
             checkpoint = torch.load(args.resume)
             args.start_epoch = checkpoint['epoch']
             best_prec1 = checkpoint['best_prec1']
-            model.load_state_dict(checkpoint['state_dict'])
             print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.evaluate, checkpoint['epoch']))
+                  .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
@@ -174,7 +173,9 @@ def main():
             return 0.1
         return 0.1 ** (epoch >= int(0.5 * args.epochs)) * 0.1 ** (epoch >= int(0.75 * args.epochs))
     
-    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=sched, last_epoch=args.start_epoch-1)
+    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=sched, last_epoch=-1)
+    for epoch in range(args.start_epoch):
+        optimizer.step() and lr_scheduler.step()
 
     if args.evaluate:
         validate(val_loader, model, criterion)
@@ -185,7 +186,7 @@ def main():
 
     for epoch in range(args.start_epoch, args.epochs):
 
-        if args.xd and epoch == args.warmup_epochs:
+        if args.xd and (epoch == args.warmup_epochs or (args.resume and epoch == args.start_epoch and epoch >= args.warmup_epochs)):
             model.cpu()
             Supernet.create(model, in_place=True)
             X, _ = next(iter(train_loader))
@@ -201,6 +202,10 @@ def main():
             optimizer = MixedOptimizer([momentum(model.model_weights(), lr=args.lr, weight_decay=args.weight_decay),
                                         arch_opt(model.arch_params(), lr=args.arch_lr, weight_decay=0.0 if args.arch_adam else args.weight_decay)])
             lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=sched, last_epoch=epoch-1)
+
+        if args.resume and epoch == args.start_epoch:
+            model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optim_state'])
 
         writer.add_scalar('hyper/lr', optimizer.param_groups[0]['lr'], epoch)
         if args.xd:
@@ -220,22 +225,22 @@ def main():
         writer.add_scalar('valid/loss', loss, epoch)
 
         # remember best prec@1 and save checkpoint
-        is_best = prec1 > best_prec1
         best_prec1 = max(prec1, best_prec1)
 
         model.train()
-        if epoch > 0 and epoch % args.save_every == 0:
+        if (epoch+1) % args.save_every == 0:
             save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
+                'optim_state': optimizer.state_dict(),
                 'best_prec1': best_prec1,
                 'permute': permute,
-            }, is_best, filename=os.path.join(args.save_dir, 'checkpoint.th'))
+            }, os.path.join(args.save_dir, 'checkpoint.th'))
         save_checkpoint({
             'state_dict': model.state_dict(),
             'best_prec1': best_prec1,
             'permute': permute,
-        }, is_best, filename=os.path.join(args.save_dir, 'model.th'))
+        }, os.path.join(args.save_dir, 'model.th'))
 
     try:
         model.save_arch(os.path.join(args.save_dir, 'arch.th'))
@@ -355,7 +360,7 @@ def validate(val_loader, model, criterion):
 
     return top1.avg, losses.avg
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+def save_checkpoint(state, filename):
     """
     Save the training model
     """
