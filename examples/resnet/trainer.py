@@ -177,12 +177,9 @@ def main():
     for epoch in range(args.start_epoch):
         optimizer.step() and lr_scheduler.step()
 
-    if args.evaluate:
-        validate(val_loader, model, criterion)
-        return
-
-    with open(os.path.join(args.save_dir, 'args.json'), 'w') as f:
-        json.dump(vars(args), f, indent=4)
+    if not args.evaluate:
+        with open(os.path.join(args.save_dir, 'args.json'), 'w') as f:
+            json.dump(vars(args), f, indent=4)
 
     for epoch in range(args.start_epoch, args.epochs):
 
@@ -206,6 +203,10 @@ def main():
         if args.resume and epoch == args.start_epoch:
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optim_state'])
+
+        if args.evaluate:
+            validate(val_loader, model, criterion)
+            return
 
         writer.add_scalar('hyper/lr', optimizer.param_groups[0]['lr'], epoch)
         if args.xd:
